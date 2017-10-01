@@ -1,4 +1,4 @@
-## Play Around with Protobuf 
+## Play Around with Protobuf+LMDB
 Try to use protobuf python wrapper to enhance daily working efficiency.
 
 ### Installation
@@ -32,7 +32,7 @@ git clone https://github.com/google/protobuf.git
 
 ### Prepare .proto file
 
-ProtoBuffer required a definition file of your own data structure. i.e. the `image.proto` file in our example.
+ProtoBuffer required a definition file of your own data structure. i.e. the `definition.proto` file in our example. FYI. this proto file contains a message named `Datum`, which is copied from [CAFFE](https://github.com/BVLC/caffe/blob/master/src/caffe/proto/caffe.proto).
 
 ```
 protoc --python_out=. definition.proto
@@ -47,4 +47,16 @@ In order to apply the tech into daily working with CAFFE, lmdb support is added.
 
 ```
 pip install lmdb
+```
+
+using lmdb in python is pretty easy, please ref to these two py scripts.
+
+with all prerequest, all three steps to play around is as follows.
+
+```
+git clone https://github.com/hyichao/protobuf-lmdb.git
+cd protobuf-lmdb
+protoc --python_out=. definition.proto
+python writer.py
+python reader.py
 ```
