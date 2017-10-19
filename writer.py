@@ -13,15 +13,15 @@ from multiprocessing import Pool
 
 def generate_datum(sample):
     '''
-    Arg: a tuple (imagepath, label)
+    Arg: a line, seperated by space [imagepath label]
     Read image and store the values into pb blob
     '''
 
     words = sample.replace('\n','').split(' ')
-    imagepath = words[0]
-    label = int(words[1])
+    assert len(words)>=2
 
-    # read image
+    ### read image ###
+    imagepath = words[0]
     image = Image.open(imagepath)
     src = np.array(image)
     if src is None:
@@ -40,13 +40,22 @@ def generate_datum(sample):
     pbdatum.width = width
     # image data store in bytes
     pbdatum.data = src.tobytes()
-    # labels 
-    pbdatum.label = label
+
+    ### labels ###
+    labels = words[1:]
+    if len(labels)==1: # one label only, typical classification
+        label = int(labels[0])
+        pbdatum.label = label
+    else:
+        labels = words[1:]
+        for ele in labels:
+            pbdatum.float_data.append(int(ele))
 
     return pbdatum
 
 
 def generate_datums_multi(samples):
+    ''' using Pool to parallel '''
     pool = Pool()
     datums = pool.map(generate_datum, samples)
     pool.close()
@@ -56,7 +65,7 @@ def generate_datums_multi(samples):
 
 import lmdb
 def write_lmdb(filepath, dbpath):
-
+    ''' commit transaction '''
     infile = open(filepath, 'r')
     lines = infile.readlines()
     datums = generate_datums_multi(lines)

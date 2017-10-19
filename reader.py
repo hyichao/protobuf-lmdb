@@ -20,7 +20,7 @@ def read_db(dbname):
 
 import lmdb
 def read_lmdb(dbname):
-    
+    '''read db with cursor '''
     env = lmdb.open(dbname)
     txn = env.begin()
     cur = txn.cursor()
@@ -34,6 +34,8 @@ def display(datum):
     # print datum
     if datum.HasField('label'):
         print datum.label
+    if datum.ListField('float_data'):
+        print datum.float_data
     if datum.HasField('data'):
         dst = np.fromstring(datum.data, dtype=np.uint8)
         if datum.channels==1:
