@@ -7,6 +7,7 @@ De-Serialize to numpy array
 import numpy as np
 import definition_pb2 as pb2
 import cv2
+from PIL import Image
 
 def read_db(dbname):
     ''' read binary data from dbfile'''
@@ -35,12 +36,20 @@ def display(datum):
         print datum.label
     if datum.HasField('data'):
         dst = np.fromstring(datum.data, dtype=np.uint8)
-        dst = dst.reshape(datum.channels,datum.height,datum.width)
-        cv2.imshow('show',dst)
-        cv2.waitKey(5000)
+        if datum.channels==1:
+            dst = dst.reshape(datum.height,datum.width)                        
+            img = Image.fromarray(dst, 'P')
+        else:
+            dst = dst.reshape(datum.height,datum.width,datum.channels)            
+            img = Image.fromarray(dst, 'RGB')
+        img.show()
 
+import argparse
 def main():
-    read_lmdb('imagedb')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dbpath", help="a folder keeping all data.")
+    args = parser.parse_args()
+    read_lmdb(args.dbpath)
 
 if __name__ == '__main__':
     main()

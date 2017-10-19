@@ -7,8 +7,8 @@ Store to Database
 
 import sys
 import definition_pb2 as pb2
-import cv2
 import numpy as np
+from PIL import Image
 from multiprocessing import Pool
 
 def generate_datum(sample):
@@ -16,19 +16,24 @@ def generate_datum(sample):
     Arg: a tuple (imagepath, label)
     Read image and store the values into pb blob
     '''
-    assert type(sample) is tuple
-    
-    imagepath = sample[0]
-    label = sample[1]
+
+    words = sample.replace('\n','').split(' ')
+    imagepath = words[0]
+    label = int(words[1])
 
     # read image
-    src = cv2.imread(imagepath)
+    image = Image.open(imagepath)
+    src = np.array(image)
     if src is None:
         print 'Empty Image. '
         return None
     # image structue
-    channel, height, width = src.shape
-
+    if len(src.shape)==3:
+        height, width, channel = src.shape
+    else:
+        height, width = src.shape
+        channel = 1
+    
     pbdatum = pb2.Datum()
     pbdatum.channels = channel
     pbdatum.height = height
@@ -40,23 +45,8 @@ def generate_datum(sample):
 
     return pbdatum
 
-# def generate_datums():
-#     samples = []
-#     for item in xrange(0,10):
-#         sample = ('lena.jpg', 0)
-#         samples.append(sample)
 
-#     for sample in samples:        
-#         generate_datum(sample)
-
-#     return datum
-
-def generate_datums_multi():
-    samples = []
-    for item in xrange(0,1):
-        sample = ('lena.jpg', 0)
-        samples.append(sample)
-
+def generate_datums_multi(samples):
     pool = Pool()
     datums = pool.map(generate_datum, samples)
     pool.close()
@@ -64,27 +54,27 @@ def generate_datums_multi():
 
     return datums
 
-# def write_db():
-#     datums = generate_datums()
-    
-#     filepath = 'images.db'
-#     # write to file
-#     with open(filepath, 'wb') as dbfile:
-#         dbfile.write(datum.SerializeToString())
-#         dbfile.close()
-
 import lmdb
-def write_lmdb():
-    datums = generate_datums_multi()
-    env = lmdb.open("imagedb",map_size=750000*sys.getsizeof(datums[0])*len(datums))
+def write_lmdb(filepath, dbpath):
+
+    infile = open(filepath, 'r')
+    lines = infile.readlines()
+    datums = generate_datums_multi(lines)
+    env = lmdb.open(dbpath, map_size=750000*sys.getsizeof(datums[0])*len(datums))
     txn = env.begin(write = True)
     for index in xrange(len(datums)):
         txn.put(str(index), datums[index].SerializeToString())
     txn.commit()
     env.close()
 
+import argparse
 def main():
-    write_lmdb()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('filepath', help='the list file recording all images and labels.')
+    parser.add_argument('dbpath', help='a folder keeping all data.')
+    args = parser.parse_args()
+
+    write_lmdb(args.filepath, args.dbpath)
 
 if __name__ == '__main__':
     main()
