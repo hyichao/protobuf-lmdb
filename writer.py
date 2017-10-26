@@ -6,29 +6,54 @@ Store to Database
 '''
 
 import sys
-import definition_pb2 as pb2
+import os
+import argparse
+
 import numpy as np
-from PIL import Image
+import cv2
 from multiprocessing import Pool
+
+import lmdb
+import definition_pb2 as pb2
+import fileio
+
+RESIZE_HEIGHT=30
+RESIZE_WIDTH=360
 
 def generate_datum(sample):
     '''
     Arg: a line, seperated by space [imagepath label]
     Read image and store the values into pb blob
     '''
-
-    words = sample.replace('\n','').split(' ')
-    assert len(words)>=2
-
+    assert len(sample)>=2
+    
     ### read image ###
-    imagepath = words[0]
-    image = Image.open(imagepath)
-    src = np.array(image)
+    imagepath = sample[0]
+    src = cv2.imread(imagepath)
     if src is None:
         print 'Empty Image. '
         return None
+
+    # image pre-processing
+    is_color = (len(src.shape)==3) 
+    if is_color:
+        height, width, channel = src.shape
+    else:
+        height, width = src.shape
+        channel = 1
+    nheight = int(RESIZE_HEIGHT)
+    nwidth = int( (1.0*RESIZE_HEIGHT/height)*width)
+    src = cv2.resize(src,(nwidth,nheight))
+
+    extend = (RESIZE_WIDTH-nwidth)/2
+    boarder_value = (128,128,128) if is_color else 128
+    if (RESIZE_WIDTH-nwidth)%2==0:
+        src = cv2.copyMakeBorder(src,0,0,extend,extend,cv2.BORDER_CONSTANT,value=boarder_value)
+    else:
+        src = cv2.copyMakeBorder(src,0,0,extend,extend+1,cv2.BORDER_CONSTANT,value=boarder_value)
+        
     # image structue
-    if len(src.shape)==3:
+    if is_color:
         height, width, channel = src.shape
     else:
         height, width = src.shape
@@ -42,14 +67,14 @@ def generate_datum(sample):
     pbdatum.data = src.tobytes()
 
     ### labels ###
-    labels = words[1:]
-    if len(labels)==1: # one label only, typical classification
-        label = int(labels[0])
-        pbdatum.label = label
-    else:
-        labels = words[1:]
-        for ele in labels:
-            pbdatum.float_data.append(int(ele))
+    # labels = sample[1:]
+    # if len(labels)==1: # one label only, typical classification
+    #     label = int(labels[0])
+    #     pbdatum.label = label
+    # else:
+    labels = sample[1:]
+    for ele in labels:
+        pbdatum.float_data.append(int(ele))
 
     return pbdatum
 
@@ -61,29 +86,63 @@ def generate_datums_multi(samples):
     pool.close()
     pool.join()
 
+    # for sample in samples:
+    #     generate_datum(sample)
+
+    datums = [sample for sample in datums if sample is not None]
+    print str(len(datums))+' datums created.'
     return datums
 
-import lmdb
-def write_lmdb(filepath, dbpath):
+def write_lmdb(filepath, charsetpath, dbpath):
     ''' commit transaction '''
-    infile = open(filepath, 'r')
-    lines = infile.readlines()
-    datums = generate_datums_multi(lines)
-    env = lmdb.open(dbpath, map_size=750000*sys.getsizeof(datums[0])*len(datums))
+
+    charset = fileio.read_utf16_charset(charsetpath)
+    lines = fileio.read_utf16_file(filepath)
+
+    env = lmdb.open(dbpath, map_size=30*300*3*10*3033)
+    batch_size = 1000
+    batches = len(lines)/batch_size
+    counter = 0
+    for index in xrange(batches):
+        print '----------- batch: '+str(index)+' -----------------'
+        sub_lines = lines[index*batch_size:(index+1)*batch_size]    
+        samples = fileio.translate_lines_by_charset(sub_lines, charset)
+        datums = generate_datums_multi(samples)
+        txn = env.begin(write = True)
+        for datum_id in xrange(len(datums)):
+            txn.put(str(index*batch_size+datum_id), datums[datum_id].SerializeToString())
+        txn.commit()
+        counter+=len(datums)
+
+    print '----------- the rest -----------------'    
+    sub_lines = lines[batches*batch_size:]
+    samples = fileio.translate_lines_by_charset(sub_lines, charset)
+    datums = generate_datums_multi(samples)
     txn = env.begin(write = True)
-    for index in xrange(len(datums)):
-        txn.put(str(index), datums[index].SerializeToString())
+    for datum_id in xrange(len(datums)):
+        txn.put(str(batches*batch_size+datum_id), datums[datum_id].SerializeToString())
     txn.commit()
+    counter+=len(datums)
+
+    print 'total datum size: '+str(counter)
     env.close()
 
-import argparse
 def main():
+    ''' parse arguments in main function '''
     parser = argparse.ArgumentParser()
     parser.add_argument('filepath', help='the list file recording all images and labels.')
+    parser.add_argument('charset', help='charset file.')
     parser.add_argument('dbpath', help='a folder keeping all data.')
+    # parser.add_argument('height', type=int, help='resize to height.')
+    # parser.add_argument('width', type=int, help='resize to width.')
     args = parser.parse_args()
 
-    write_lmdb(args.filepath, args.dbpath)
+    if not os.path.exists(args.filepath):
+        print 'error path: '+args.filepath
+    if not os.path.exists(args.charset):
+        print 'error path: '+args.charset
+
+    write_lmdb(args.filepath, args.charset, args.dbpath)
 
 if __name__ == '__main__':
     main()
