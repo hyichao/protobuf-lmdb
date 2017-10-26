@@ -58,7 +58,10 @@ def generate_datum(sample):
     else:
         height, width = src.shape
         channel = 1
-    
+    # HWC --> CHW
+    src = src.transpose(2,0,1)
+
+    ### generating pbdatum ###
     pbdatum = pb2.Datum()
     pbdatum.channels = channel
     pbdatum.height = height
@@ -66,7 +69,6 @@ def generate_datum(sample):
     # image data store in bytes
     pbdatum.data = src.tobytes()
 
-    ### labels ###
     # labels = sample[1:]
     # if len(labels)==1: # one label only, typical classification
     #     label = int(labels[0])

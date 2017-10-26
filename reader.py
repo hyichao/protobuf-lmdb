@@ -43,7 +43,8 @@ def display(index, datum):
             dst = dst.reshape(datum.height,datum.width)                     
             # img = Image.fromarray(dst, 'P')
         else:
-            dst = dst.reshape(datum.height,datum.width,datum.channels)            
+            dst = dst.reshape(datum.channels,datum.height,datum.width) 
+            dst = dst.transpose(1,2,0) # CHW-->HWC
             # img = Image.fromarray(dst, 'RGB')
         # img.show()
         # fig = plt.figure()  
