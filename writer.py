@@ -102,7 +102,7 @@ def write_lmdb(filepath, charsetpath, dbpath):
     lines = fileio.read_utf16_file(filepath)
 
     env = lmdb.open(dbpath, map_size=30*300*3*10*3033)
-    batch_size = 1000
+    batch_size = 3000
     batches = len(lines)/batch_size
     counter = 0
     for index in xrange(batches):
